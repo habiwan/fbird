@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="
+    width=device-width,
+    initial-scale=1.0,
+    maximum-scale=1.0,
+    user-scalable=no,
+    viewport-fit=cover">
+    <link rel="shortcut icon"
+    href="
+    https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/UZ_road_sign_1.25.2.svg/960px-UZ_road_sign_1.25.2.svg.png"
+    type="image/svg+xml">
+    <title>Fly through the bronXs</title>
+    <style>
+        body {
+            margin: 0; 
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100dvh; /* 'dvh' respects iOS Safari's shrinking address bars */
+            background: linear-gradient(to bottom, #64b3f4, #c2e59c);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+
+            /* CSS ANTI-ZOOM: Forcibly kills double-tap zoom and hold-to-highlight on mobile */
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .game-container {
+            position: relative;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+
+            /* Force a strict 9:16 stretch to 90% of the absolute edges */
+            aspect-ratio: 360 / 640;
+            width: 90vw;
+            height: 90dvh;
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 16px;    /* Give it a sleek, rounded "Arcade Cabinet" look */
+
+            /* Magic trigger: Tells text inside to scale relative to this box's width */
+            container-type: inline-size; 
+        }
+        /* DESKTOP / TABLET CAP: If the screen is wider than a phone, stop growing! */
+        @media (min-width: 600px) {
+            .game-container {
+                height: 95dvh;          /* Leave a nice breathing margin top and bottom */
+                max-height: 95%;        /* Hard ceiling: Never grow taller than 95% */
+                width: auto;            /* Let the 9:16 aspect ratio figure out the width */
+                border-radius: 16px;    /* Give it a sleek, rounded "Arcade Cabinet" look */
+            }
+        }
+
+        canvas {
+            display: block;
+            width: 100%; /* Stretches canvas to match the responsive container */
+            height: 100%;
+            background: #70c5ce;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            pointer-events: none;
+            box-sizing: border-box;
+            padding: 4cqw; /* cqw = "Container Query Width" */
+        }
+
+        /* Forces the pop-up cards into dead-center alignment */
+        #startScreen, #gameOverScreen, #gameUI {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        /* cqw = "Container Query Width". e.g. 10cqw means '10% of the game canvas width' */
+        .game-title {
+            font-size: 13cqw;
+            font-weight: 800;
+            margin: 0 0 4cqw 0;
+            text-shadow: 0 0.8cqw 2cqw rgba(0,0,0,0.6);
+            line-height: 1.1;
+        }
+
+        .score-display {
+            font-size: 16cqw;
+            font-weight: bold;
+            text-shadow: 0 0.6cqw 2cqw rgba(0, 0, 0, 0.5);
+            margin-top: 3cqw;
+        }
+
+        .message {
+            background: rgba(0, 0, 0, 0.75);
+            padding: 4cqw 6cqw;
+            border-radius: 3cqw;
+            font-size: 6cqw;
+            width: 85%;
+            box-sizing: border-box;
+            margin-bottom: 6cqw;
+            box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+
+        .instructions {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 3.5cqw 5cqw;
+            border-radius: 2cqw;
+            font-size: 4.5cqw;
+            margin-top: 5cqw;
+            width: 80%;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #f1c40f;
+            border: none;
+            padding: 4cqw 10cqw;
+            font-size: 6.5cqw;
+            border-radius: 10cqw;
+            cursor: pointer;
+            font-weight: 900;
+            color: #2c3e50;
+            box-shadow: 0 1.5cqw 4cqw rgba(0, 0, 0, 0.4);
+            transition: transform 0.1s;
+            pointer-events: auto;
+            margin-top: 2cqw;
+        }
+
+        button:active { 
+            transform: scale(0.92); 
+        }
+
+        .hidden { 
+            display: none !important; 
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="360" height="640"></canvas>
+        <div class="ui-overlay">
+            <div id="startScreen">
+                <h1 class="game-title">
+                    Fly through<br>
+                    the bronXs
+                </h1>
+                <div class="message">
+                    Tap the screen or<br>
+                    click the mouse or<br>
+                    hit spacebar to<br>
+                    flap your wings
+                </div>
+                <button id="startButton">
+                    START GAME
+                </button>
+                <div class="instructions">
+                    Avoid the pipes and<br>
+                    don't hit the ground!
+                </div>
+            </div>
+            <div id="gameOverScreen" class="hidden">
+                <div class="message" style="font-size: 8cqw; font-weight:bold; color: #ff4757;">
+                    GAME OVER
+                </div>
+                <div class="score-display">
+                    Score: <span id="finalScore">0</span>
+                </div>
+                <button id="restartButton">
+                    TRY AGAIN
+                </button>
+            </div>
+            <div id="gameUI" class="hidden">
+                <div class="score-display" id="score">0</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const gameUI = document.getElementById('gameUI');
+        const scoreDisplay = document.getElementById('score');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+
+        // Game state
+        let gameState = 'start'; // 'start', 'playing', 'gameover'
+        let score = 0; 
+        let frames = 0;
+
+        // Bird properties
+        const bird = {
+            x: 50,
+            y: canvas.height / 2 - 10,
+            width: 34,
+            height: 24,
+            gravity: 0.5,
+            velocity: 0,
+            jump: -10,
+
+            draw: function() {
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 15, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw eye
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(this.x + 8, this.y - 3, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw beak
+                ctx.fillStyle = '#FF8C00';
+                ctx.beginPath();
+                ctx.moveTo(this.x + 15, this.y);
+                ctx.lineTo(this.x + 30, this.y);
+                ctx.lineTo(this.x + 15, this.y + 8);
+                ctx.fill();
+
+                // Draw wing
+                ctx.fillStyle = '#FFA500';
+                ctx.beginPath();
+                ctx.ellipse(this.x - 5, this.y + 5, 10, 7, 0, 0, Math.PI * 2);
+                ctx.fill();
+            },
+
+            update: function() {
+                if (gameState === 'playing') {
+                    this.velocity += this.gravity;
+                    this.y += this.velocity;
+
+                    // Floor collision
+                    if (this.y + this.height/2 >= canvas.height - groundHeight) {
+                        this.y = canvas.height - groundHeight - this.height/2;
+                        if (gameState === 'playing') {
+                            gameOver();
+                        }
+                    }
+
+                    // Ceiling collision
+                    if (this.y - this.height/2 <= 0) {
+                        this.y = this.height/2;
+                        this.velocity = 0;
+                    }
+                }
+            },
+
+            flap: function() { 
+                this.velocity = this.jump;
+            },
+
+            reset: function() {
+                this.y = canvas.height / 2 - 10;
+                this.velocity = 0;
+            }
+        };
+
+        // Pipes
+        const pipes = {
+            position: [],
+            gap: 180,
+            maxYPos: -150,
+            dx: 2,
+
+            draw: function() {
+                for (let i = 0; i < this.position.length; i++) {
+                    let p = this.position[i];
+
+                    // Top pipe
+                    ctx.fillStyle = '#2ECC71';
+                    ctx.fillRect(p.x, p.y, p.width, p.height);
+
+                    // Pipe cap
+                    ctx.fillStyle = '#27AE60';
+                    ctx.fillRect(p.x - 3, p.y + p.height - 20, p.width + 6, 20);
+
+                    // Bottom pipe
+                    ctx.fillStyle = '#2ECC71';
+                    ctx.fillRect(p.x, p.y + p.height + this.gap, p.width, canvas.height);
+
+                    // Pipe cap
+                    ctx.fillStyle = '#27AE60';
+                    ctx.fillRect(p.x - 3, p.y + p.height + this.gap, p.width + 6, 20);
+                }
+            },
+
+            update: function() {
+                if (gameState !== 'playing') return;
+
+                if (frames % 100 === 0) {
+                    this.position.push({
+                        x: canvas.width,
+                        y: this.maxYPos * (Math.random() + 1),
+                        width: 60,
+                        height: 300
+                    });
+                }
+
+                for (let i = 0; i < this.position.length; i++) {
+                    let p = this.position[i];
+
+                    // Move pipe to the left
+                    p.x -= this.dx;
+
+                    // If pipe moves off screen, remove it and add score
+                    if (p.x + p.width <= 0) {
+                        this.position.shift();
+                        score++;
+                        scoreDisplay.innerHTML = score;
+                    }
+
+                    // Collision detection  
+                    // Top pipe
+                    if (
+                        bird.x + bird.width/2 > p.x &&
+                        bird.x - bird.width/2 < p.x + p.width &&
+                        bird.y - bird.height/2 < p.y + p.height
+                    ) {
+                        gameOver();
+                    }
+                    
+                    // Bottom pipe
+                    if (
+                        bird.x + bird.width/2 > p.x &&
+                        bird.x - bird.width/2 < p.x + p.width &&
+                        bird.y + bird.height/2 > p.y + p.height + this.gap
+                    ) {
+                        gameOver();
+                    }
+                }
+            },
+
+            reset: function() {
+                this.position = [];
+            }
+        };
+
+        // Ground
+        const groundHeight = 80;
+
+        function drawGround() {
+            ctx.fillStyle = '#DAA520';
+            ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
+
+            // Draw grass
+            ctx.fillStyle = '#2ECC71';
+            ctx.fillRect(0, canvas.height - groundHeight, canvas.width, 20);
+
+            // Draw some details
+            ctx.fillStyle = '#8B4513';
+            for (let i = 0; i < canvas.width; i += 30) {
+                ctx.fillRect(i, canvas.height - groundHeight + 20, 15, 10);
+            }
+        }
+
+        // Background elements
+        function drawBackground() {
+
+            // Sky gradient
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGradient.addColorStop(0, '#70c5ce');
+            skyGradient.addColorStop(1, '#e0f7fa');
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Clouds
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(100, 80, 30, 0, Math.PI * 2);
+            ctx.arc(130, 70, 35, 0, Math.PI * 2);
+            ctx.arc(160, 80, 25, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(300, 120, 30, 0, Math.PI * 2);
+            ctx.arc(330, 110, 35, 0, Math.PI * 2);
+            ctx.arc(360, 120, 25, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Game functions
+        function gameOver() {
+            gameState = 'gameover';
+            finalScoreDisplay.innerHTML = score;
+            gameOverScreen.classList.remove('hidden');
+            gameUI.classList.add('hidden');
+        }
+
+        function resetGame() {
+            score = 0; frames = 0;
+            bird.reset();
+            pipes.reset();
+            scoreDisplay.innerHTML = score;
+        }
+
+        function startGame() {
+            gameState = 'playing';
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            gameUI.classList.remove('hidden');
+            resetGame();
+        }
+
+        // Draw everything
+        function draw() {
+            drawBackground();
+            pipes.draw();
+            drawGround();
+            bird.draw(); 
+        }
+
+        // Update game state
+        function update() {
+            bird.update();
+            pipes.update();
+        }
+
+        // Game loop
+        function loop() {
+            update();
+            draw();
+            frames++;
+
+            requestAnimationFrame(loop);
+        }
+
+        // Event listeners
+        function flapBird() {
+            if (gameState === 'playing') {
+                bird.flap();
+            }
+        }
+
+        /*  ==============================================================
+            THE JAVASCRIPT BRUTE-FORCE ANTI-ZOOM & INSTANT TOUCH LISTENERS
+            ==============================================================  */
+
+        // Listen to raw touchstarts instead of 'click'.
+        // This removes mobile Safari's built-in 300ms "click delay", making flapping feel instant.
+
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault(); // Tells Safari: "I handled this touch, do NOT try to zoom."
+            flapBird();
+        }, { passive: false });
+
+        // Fallback for PC mouse users
+        canvas.addEventListener('mousedown', flapBird);
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space') {
+                flapBird();
+                
+                // Prevent space from scrolling page
+                e.preventDefault();
+            }
+        });
+
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+
+        // The Ultimate Safari Insurance Policy: Intercept all double-taps globally        
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function(e) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+
+        // Start the game loop
+        loop();
+    </script>
+</body>
+</html>
